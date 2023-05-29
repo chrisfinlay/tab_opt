@@ -1,5 +1,7 @@
 notebooks/data/Params*
 notebooks/data/imaging*
 notebooks/data/calibrated*
-notebooks/.ipynb_checkpoints*
+*.ipynb_checkpoints*
 notebooks/Params*
+*__pycache__*
+tab_opt.egg-info*
