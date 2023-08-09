@@ -1,7 +1,11 @@
 notebooks/data/Params*
 notebooks/data/imaging*
 notebooks/data/calibrated*
+notebooks/data/primary*
 *.ipynb_checkpoints*
 notebooks/Params*
 *__pycache__*
 tab_opt.egg-info*
+*.pdf
+*.png
+*.DS_Store
