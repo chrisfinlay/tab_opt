@@ -48,8 +48,7 @@ plt.rcParams["font.size"] = 16
 # In[3]:
 
 
-# f_name = "/Users/chrisfinlay/Documents/PhD/tabascal/tabascal/tabascal/examples/target_obs_08A_450T-0440-1338_128I_001F-1.227e+09-1.227e+09_100AST_1SAT_0GRD/"
-f_name = "/Users/chrisfinlay/Documents/PhD/tabascal/tabascal/tabascal/examples/target_obs_08A_030T-0440-0498_128I_001F-1.227e+09-1.227e+09_100AST_1SAT_1GRD/"
+f_name = "/Users/chrisfinlay/Documents/PhD/tabascal/tabascal/tabascal/examples/target_obs_08A_450T-0440-1338_128I_001F-1.227e+09-1.227e+09_100AST_1SAT_0GRD/"
 
 ds = xr.open_zarr(f_name)
 
@@ -412,8 +411,6 @@ rfi_idx = jnp.array(
 times_rfi = times_fine[rfi_idx]
 N_rfi_time = len(times_rfi)
 rfi_A = rfi_A_app[rfi_idx, :, 0].T
-
-print(rfi_A_app.dtype)
 
 rfi_signal = rfi_A_app * rfi_gains
 rfi_real = rfi_signal[rfi_idx, :, 0].T.real
