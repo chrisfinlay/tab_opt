@@ -8,7 +8,7 @@ def plot_comparison(
     ax, times, mean1, mean2, std1, std2, true1, true2, rmse, diff=False
 ):
     for i, a in enumerate(ax):
-        a[0].plot(rmse[:, i], "o")
+        a[0].plot(rmse[..., i], "o")
         a[0].set_xlabel("Sample")
 
         if diff:
@@ -41,9 +41,16 @@ def plot_comparison(
 
 
 def plot_complex_real_imag(
-    times, param, true, rmse, name: str, save_name: str = None, diff: bool = False
+    times,
+    param,
+    true,
+    rmse,
+    name: str,
+    save_name: str = None,
+    diff: bool = False,
+    max_plots: int = 10,
 ):
-    n_params = param.shape[1]
+    n_params = min(param.shape[1], max_plots)
     mean_r = param.real.mean(axis=0)
     mean_i = param.imag.mean(axis=0)
     std_r = param.real.std(axis=0)
@@ -61,10 +68,18 @@ def plot_complex_real_imag(
 
     if save_name is not None:
         fig.savefig(f"plots/{save_name}_real_imag.png", bbox_inches="tight")
+    plt.close(fig)
 
 
 def plot_complex_amp_phase(
-    times, param, true, rmse, name: str, save_name: str = None, diff: bool = False
+    times,
+    param,
+    true,
+    rmse,
+    name: str,
+    save_name: str = None,
+    diff: bool = False,
+    max_plots: int = 10,
 ):
     n_params = param.shape[1]
     mean_amp = jnp.abs(param).mean(axis=0)
@@ -93,34 +108,40 @@ def plot_complex_amp_phase(
 
     if save_name is not None:
         fig.savefig(f"plots/{save_name}_amp_phase.png", bbox_inches="tight")
+    plt.close(fig)
 
 
-def plot_predictions(times, pred, params, type: str = ""):
+def plot_predictions(
+    times, pred, args, type: str = "", model_name: str = "", max_plots: int = 10
+):
     plot_complex_real_imag(
         times=times,
         param=pred["ast_vis"],
-        true=params["vis_ast_true"],
+        true=args["vis_ast_true"],
         rmse=pred["rmse_ast"],
         name="Ast. Vis.",
-        save_name=f"{type}_ast_vis",
+        save_name=f"{model_name}_{type}_ast_vis",
+        max_plots=max_plots,
     )
 
-    plot_complex_real_imag(
+    plot_complex_amp_phase(
         times=times,
         param=pred["rfi_vis"],
-        true=params["vis_rfi_true"],
+        true=args["vis_rfi_true"],
         rmse=pred["rmse_rfi"],
         name="RFI Vis.",
-        save_name=f"{type}_rfi_vis",
-        diff=True,
+        save_name=f"{model_name}_{type}_rfi_vis",
+        diff=False,  # True,
+        max_plots=max_plots,
     )
 
     plot_complex_amp_phase(
         times=times,
         param=pred["gains"],
-        true=params["gains_true"],
+        true=args["gains_true"],
         rmse=pred["rmse_gains"],
         name="Gains",
-        save_name=f"{type}_gains",
+        save_name=f"{model_name}_{type}_gains",
         diff=False,
+        max_plots=max_plots,
     )
