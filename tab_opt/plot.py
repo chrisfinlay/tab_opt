@@ -14,8 +14,14 @@ def plot_comparison(
         if diff:
             a[1].plot(times, mean1[i] - true1[i].real, label="Estimate")
             a[1].fill_between(times, -std1[i], std1[i], color="tab:orange", alpha=0.3)
+            a[1].fill_between(
+                times, -2 * std1[i], 2 * std1[i], color="tab:orange", alpha=0.3
+            )
             a[2].plot(times, mean2[i] - true2[i], label="Estimate")
             a[2].fill_between(times, -std2[i], std2[i], color="tab:orange", alpha=0.3)
+            a[2].fill_between(
+                times, -2 * std2[i], 2 * std2[i], color="tab:orange", alpha=0.3
+            )
         else:
             a[1].plot(times, true1[i], label="True")
             a[1].plot(times, mean1[i], label="Estimate")
@@ -26,12 +32,26 @@ def plot_comparison(
                 color="tab:orange",
                 alpha=0.3,
             )
+            a[1].fill_between(
+                times,
+                mean1[i] - 2 * std1[i],
+                mean1[i] + 2 * std1[i],
+                color="tab:orange",
+                alpha=0.3,
+            )
             a[2].plot(times, true2[i], label="True")
             a[2].plot(times, mean2[i], label="Estimate")
             a[2].fill_between(
                 times,
                 mean2[i] - std2[i],
                 mean2[i] + std2[i],
+                color="tab:orange",
+                alpha=0.3,
+            )
+            a[2].fill_between(
+                times,
+                mean2[i] - 2 * std2[i],
+                mean2[i] + 2 * std2[i],
                 color="tab:orange",
                 alpha=0.3,
             )
@@ -67,7 +87,9 @@ def plot_complex_real_imag(
     )
 
     if save_name is not None:
-        fig.savefig(f"plots/{save_name}_real_imag.png", bbox_inches="tight")
+        fig.savefig(
+            f"plots/{save_name}_real_imag.pdf", format="pdf", bbox_inches="tight"
+        )
     plt.close(fig)
 
 
@@ -81,7 +103,7 @@ def plot_complex_amp_phase(
     diff: bool = False,
     max_plots: int = 10,
 ):
-    n_params = param.shape[1]
+    n_params = min(param.shape[1], max_plots)
     mean_amp = jnp.abs(param).mean(axis=0)
     mean_phase = jnp.rad2deg(jnp.angle(param)).mean(axis=0)
     std_amp = jnp.abs(param).std(axis=0)
@@ -107,7 +129,9 @@ def plot_complex_amp_phase(
     )
 
     if save_name is not None:
-        fig.savefig(f"plots/{save_name}_amp_phase.png", bbox_inches="tight")
+        fig.savefig(
+            f"plots/{save_name}_amp_phase.pdf", format="pdf", bbox_inches="tight"
+        )
     plt.close(fig)
 
 

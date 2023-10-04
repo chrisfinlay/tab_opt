@@ -26,7 +26,11 @@ from tab_opt.gp import (
 )
 from tab_opt.plot import plot_predictions
 from tab_opt.vis import averaging, get_rfi_vis1, get_rfi_vis2, rmse
-from tab_opt.models import fixed_orbit_real_rfi, fixed_orbit_real_rfi_compressed
+from tab_opt.models import (
+    fixed_orbit_real_rfi,
+    fixed_orbit_real_rfi_compressed,
+    fixed_orbit_real_rfi_compressed2,
+)
 
 import matplotlib.pyplot as plt
 
@@ -48,13 +52,15 @@ sampling = 1
 ### Define Model
 # model = fixed_orbit_real_rfi
 # model_name = "fixed_orbit_real_rfi"
-model = fixed_orbit_real_rfi_compressed
-model_name = "fixed_orbit_real_rfi_compressed"
+# model = fixed_orbit_real_rfi_compressed
+# model_name = "fixed_orbit_real_rfi_compressed"
+model = fixed_orbit_real_rfi_compressed2
+model_name = "fixed_orbit_real_rfi_compressed2"
 
 print(f"Model : {model_name}")
 
 
-sim_dir = "/Users/chrisfinlay/Documents/PhD/tabascal/tabascal/tabascal/examples/data"
+sim_dir = "/Users/chrisfinlay/Documents/PhD/tabascal/tabascal/examples/data"
 f_name = f"target_obs_{N_ant:02}A_450T-0440-1338_128I_001F-1.227e+09-1.227e+09_100AST_1SAT_0GRD/"
 sim_path = os.path.join(sim_dir, f_name)
 
@@ -174,8 +180,6 @@ rfi_kernel = vmap(averaging, in_axes=(2, None), out_axes=2)(
 true_params = {
     **{"g_amp_induce": jnp.abs(gains_induce)},
     **{"g_phase_induce": jnp.angle(gains_induce[:-1])},
-    # **{f"vis_r_{i}": vis_ast_induce[i].real for i in range(N_bl)},
-    # **{f"vis_i_{i}": vis_ast_induce[i].imag for i in range(N_bl)},
     **{"vis_r_induce": vis_ast_induce.real},
     **{"vis_i_induce": vis_ast_induce.imag},
     **{"rfi_r_induce": rfi_induce.real},
@@ -247,6 +251,7 @@ args.update(
     }
 )
 
+
 # print(true_params["rfi_r_induce"].shape)
 # print(args["resample_rfi"].shape)
 # print(args["rfi_phase"].shape)
@@ -265,6 +270,14 @@ vis_rfi_test2 = get_rfi_vis2(
 ).T
 rel_rmse2 = rmse(vis_rfi_test2 / vis_rfi_true, 1, axis=(0, 1))
 
+
+true_params = {
+    **{f"g_amp_induce_{i}": x for i, x in enumerate(jnp.abs(gains_induce))},
+    **{f"g_phase_induce_{i}": x for i, x in enumerate(jnp.angle(gains_induce[:-1]))},
+    **{f"vis_r_induce_{i}": vis_ast_induce[i].real for i in range(N_bl)},
+    **{f"vis_i_induce_{i}": vis_ast_induce[i].imag for i in range(N_bl)},
+    **{f"rfi_r_induce_{i}": x for i, x in enumerate(rfi_induce.real)},
+}
 
 print()
 print(

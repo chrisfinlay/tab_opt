@@ -21,6 +21,12 @@ from tab_opt.mcmc import (
     log_multinorm,
     log_multinorm_sum,
 )
+from tab_opt.transform import (
+    affine_transform_full,
+    affine_transform_full_inv,
+    affine_transform_diag,
+    affine_transform_diag_inv,
+)
 from tabascal.jax.coordinates import orbit
 from tabascal.utils.jax import progress_bar_scan
 
@@ -290,7 +296,7 @@ def pad_vis(vis):
 
 @jit
 def rfi_vis_model(q, params, ant1, ant2):
-    q = scale_parameters(q, inv_scalings)
+    # q = scale_parameters(q, inv_scalings)
 
     ants = jnp.array([ant1, ant2])
 
@@ -313,7 +319,8 @@ def ast_vis_model(q, params, bl):
 
 @jit
 def model(q, params, ant1, ant2, bl):
-    q = scale_parameters(q, inv_scalings)
+    # q = scale_parameters(q, inv_scalings)
+    q = transform_parameters(q, params)
 
     ants = jnp.array([ant1, ant2])
 
@@ -335,30 +342,126 @@ def model(q, params, ant1, ant2, bl):
     return jnp.concatenate([model_vis.real.flatten(), model_vis.imag.flatten()])
 
 
-# @jit
-def scale_parameters(q, scalings):
-    q["g_amp"] = tree_map(lambda x: scalings["g_amp"] * x, q["g_amp"])
-    q["g_phase"] = tree_map(lambda x: scalings["g_phase"] * x, q["g_phase"])
-    q["rfi_orbit"] = scalings["rfi_orbit"] @ q["rfi_orbit"]
-    return q
+# # @jit
+# def scale_parameters(q, scalings):
+#     q["g_amp"] = tree_map(lambda x: scalings["g_amp"] * x, q["g_amp"])
+#     q["g_phase"] = tree_map(lambda x: scalings["g_phase"] * x, q["g_phase"])
+#     q["rfi_orbit"] = scalings["rfi_orbit"] @ q["rfi_orbit"]
+#     return q
 
 
 # In[14]:
 
 
-scalings = {
-    "g_amp": jnp.array([100.0]),
-    "g_phase": jnp.rad2deg(1.0),
-    "rfi_orbit": jnp.diag(jnp.array([1e-2, 3600e0, 3600e1, 3600e1])),
-}
+@jit
+def transform_parameters(q, transform_params):
+    q_new = {
+        "rfi_orbit": affine_transform_full(
+            q["rfi_orbit"],
+            transform_params["L_RFI_orbit"],
+            transform_params["mu_RFI_orbit"],
+        ),
+        "rfi_real": tree_map(
+            lambda x: affine_transform_diag(
+                x, transform_params["std_RFI"], transform_params["mu_RFI"]
+            ),
+            q["rfi_real"],
+        ),
+        "rfi_imag": tree_map(
+            lambda x: affine_transform_diag(
+                x, transform_params["std_RFI"], transform_params["mu_RFI"]
+            ),
+            q["rfi_imag"],
+        ),
+        "g_amp": tree_map(
+            lambda x, mu: affine_transform_full(x, transform_params["L_G_amp"], mu),
+            q["g_amp"],
+            transform_params["mu_G_amp"],
+        ),
+        "g_phase": tree_map(
+            lambda x, mu: affine_transform_full(x, transform_params["L_G_phase"], mu),
+            q["g_phase"],
+            transform_params["mu_G_phase"],
+        ),
+        "v_real": tree_map(
+            affine_transform_full,
+            q["v_real"],
+            transform_params["L_vis"],
+            transform_params["mu_vis"],
+        ),
+        "v_imag": tree_map(
+            affine_transform_full,
+            q["v_imag"],
+            transform_params["L_vis"],
+            transform_params["mu_vis"],
+        ),
+    }
+    return q_new
+
+
+@jit
+def inv_transform_parameters(q, transform_params):
+    q_new = {
+        "rfi_orbit": affine_transform_full_inv(
+            q["rfi_orbit"],
+            jnp.linalg.inv(transform_params["L_RFI_orbit"]),
+            transform_params["mu_RFI_orbit"],
+        ),
+        "rfi_real": tree_map(
+            lambda x: affine_transform_diag_inv(
+                x, 1.0 / transform_params["std_RFI"], transform_params["mu_RFI"]
+            ),
+            q["rfi_real"],
+        ),
+        "rfi_imag": tree_map(
+            lambda x: affine_transform_diag_inv(
+                x, 1.0 / transform_params["std_RFI"], transform_params["mu_RFI"]
+            ),
+            q["rfi_imag"],
+        ),
+        "g_amp": tree_map(
+            lambda x, mu: affine_transform_full_inv(
+                x, jnp.linalg.inv(transform_params["L_G_amp"]), mu
+            ),
+            q["g_amp"],
+            transform_params["mu_G_amp"],
+        ),
+        "g_phase": tree_map(
+            lambda x, mu: affine_transform_full_inv(
+                x, jnp.linalg.inv(transform_params["L_G_phase"]), mu
+            ),
+            q["g_phase"],
+            transform_params["mu_G_phase"],
+        ),
+        "v_real": tree_map(
+            affine_transform_full_inv,
+            q["v_real"],
+            transform_params["L_vis_inv"],
+            transform_params["mu_vis"],
+        ),
+        "v_imag": tree_map(
+            affine_transform_full_inv,
+            q["v_imag"],
+            transform_params["L_vis_inv"],
+            transform_params["mu_vis"],
+        ),
+    }
+    return q_new
+
+
+# scalings = {
+#     "g_amp": jnp.array([100.0]),
+#     "g_phase": jnp.rad2deg(1.0),
+#     "rfi_orbit": jnp.diag(jnp.array([1e-2, 3600e0, 3600e1, 3600e1])),
+# }
 
 # scalings = {'g_amp': jnp.array([1.]),
 #             'g_phase': jnp.array([1.]),
 #             'rfi_orbit': jnp.eye(4)}
 
-inv_scalings = tree_map(
-    lambda x: jnp.linalg.inv(x) if x.ndim == 2 else 1.0 / x, scalings
-)
+# inv_scalings = tree_map(
+#     lambda x: jnp.linalg.inv(x) if x.ndim == 2 else 1.0 / x, scalings
+# )
 
 # Calculate approximate True values
 
@@ -372,8 +475,12 @@ mag_uvw = jnp.linalg.norm(ants_uvw[0, a1] - ants_uvw[0, a2], axis=-1)
 vis_var = (jnp.abs(vis_ast).max(axis=(0, 2)) + noise) ** 2
 vis_l = l_from_uv(mag_uvw, l0=5e2)
 
-g_amp_var = (0.01 * scalings["g_amp"]) ** 2
-g_phase_var = (jnp.deg2rad(1.0) * scalings["g_phase"]) ** 2
+# g_amp_var = (0.01 * scalings["g_amp"]) ** 2
+# g_phase_var = (jnp.deg2rad(1.0) * scalings["g_phase"]) ** 2
+# g_l = 10e3
+
+g_amp_var = (0.01) ** 2
+g_phase_var = (jnp.deg2rad(1.0)) ** 2
 g_l = 10e3
 
 rfi_var, rfi_l = 1e6, 15.0
@@ -429,9 +536,6 @@ true_values = {
     "v_imag": {i: vis_ast.imag[vis_idxs[i], i, 0] for i in range(N_bl)},
 }
 
-true_values = scale_parameters(true_values, scalings)
-flat_true_values, unflatten = flatten(true_values)
-
 ####################################################################
 
 
@@ -456,22 +560,69 @@ def sym(x):
 
 rfi_cov_fp = "../notebooks/data/RFIorbitCov5min.npy"
 
-cov_RFI_orbit = scalings["rfi_orbit"] @ np.load(rfi_cov_fp) @ scalings["rfi_orbit"]
-inv_cov_RFI_orbit = sym(jnp.linalg.inv(cov_RFI_orbit))
+# cov_RFI_orbit = scalings["rfi_orbit"] @ np.load(rfi_cov_fp) @ scalings["rfi_orbit"]
+# inv_cov_RFI_orbit = sym(jnp.linalg.inv(cov_RFI_orbit))
 rfi_orbit = rfi_orbit
 
-prior_params = {
-    "mu_RFI_orbit": scalings["rfi_orbit"] @ rfi_orbit,
-    "inv_cov_RFI_orbit": inv_cov_RFI_orbit,
-    "mu_G_amp": scalings["g_amp"] * jnp.abs(G),
-    "mu_G_phase": scalings["g_phase"] * jnp.angle(G)[:-1],
-    "rfi_amp_std": 100.0,
+# prior_params = {
+#     "mu_RFI_orbit": scalings["rfi_orbit"] @ rfi_orbit,
+#     "inv_cov_RFI_orbit": inv_cov_RFI_orbit,
+#     "mu_G_amp": scalings["g_amp"] * jnp.abs(G),
+#     "mu_G_phase": scalings["g_phase"] * jnp.angle(G)[:-1],
+#     "rfi_amp_std": 100.0,
+#     "mu_vis": {i: jnp.zeros(len(vis_times[i])) for i in range(N_bl)},
+#     "inv_cov_vis": {
+#         i: inv_kernel(vis_times[i][:, None], vis_var[i], vis_l[i]) for i in range(N_bl)
+#     },
+#     "inv_cov_G_amp": inv_kernel(times_g[:, None], g_amp_var, g_l),
+#     "inv_cov_G_phase": inv_kernel(times_g[:, None], g_phase_var, g_l),
+# }
+
+
+transform_params = {
+    "mu_RFI_orbit": rfi_orbit,
+    "L_RFI_orbit": jnp.linalg.cholesky(np.load(rfi_cov_fp)),
+    "mu_RFI": 0.0,
+    "std_RFI": 100.0,
+    "mu_G_amp": {i: x for i, x in enumerate(jnp.abs(G))},
+    "L_G_amp": jnp.linalg.cholesky(
+        kernel(times_g[:, None], times_g[:, None], g_amp_var, g_l, 1e-8)
+    ),
+    "mu_G_phase": {i: x for i, x in enumerate(jnp.angle(G)[:-1])},
+    "L_G_phase": jnp.linalg.cholesky(
+        kernel(times_g[:, None], times_g[:, None], g_phase_var, g_l, 1e-8)
+    ),
     "mu_vis": {i: jnp.zeros(len(vis_times[i])) for i in range(N_bl)},
-    "inv_cov_vis": {
-        i: inv_kernel(vis_times[i][:, None], vis_var[i], vis_l[i]) for i in range(N_bl)
+    "L_vis": {
+        i: jnp.linalg.cholesky(
+            kernel(
+                vis_times[i][:, None], vis_times[i][:, None], vis_var[i], vis_l[i], 1e-3
+            )
+        )
+        for i in range(N_bl)
     },
-    "inv_cov_G_amp": inv_kernel(times_g[:, None], g_amp_var, g_l),
-    "inv_cov_G_phase": inv_kernel(times_g[:, None], g_phase_var, g_l),
+    "L_vis_inv": {
+        i: jnp.linalg.inv(
+            jnp.linalg.cholesky(
+                kernel(
+                    vis_times[i][:, None],
+                    vis_times[i][:, None],
+                    vis_var[i],
+                    vis_l[i],
+                    1e-3,
+                )
+            )
+        )
+        for i in range(N_bl)
+    },
+}
+
+
+true_values = inv_transform_parameters(true_values, transform_params)
+# true_values = scale_parameters(true_values, scalings)
+flat_true_values, unflatten = flatten(true_values)
+
+sample_params = {
     "resample_vis": {
         i: resampling_kernel(vis_times[i], times, vis_var[i], vis_l[i], 1e-3)
         for i in range(N_bl)
@@ -483,14 +634,15 @@ prior_params = {
     ),
 }
 
-prior_params["resample_vis"] = jnp.array(
+sample_params["resample_vis"] = jnp.array(
     [
         jnp.pad(x, ((0, 0), (0, N_vis_time - x.shape[1])))
-        for x in prior_params["resample_vis"].values()
+        for x in sample_params["resample_vis"].values()
     ]
 )
 
-params.update(prior_params)
+params.update(transform_params)
+params.update(sample_params)
 
 flatten(true_values["v_real"])[0].shape[0], N_vis_time * N_bl, N_time * N_bl, flatten(
     true_values["v_real"]
@@ -509,76 +661,82 @@ print(f"Max and Min Vis samples : ({int(n_vis_times.max())}, {int(n_vis_times.mi
 # In[17]:
 
 
-inv_cov_vis = jnp.array(
-    [
-        jnp.pad(x, ((0, N_vis_time - x.shape[0]), (0, N_vis_time - x.shape[1])))
-        for x in prior_params["inv_cov_vis"].values()
-    ]
-)
+# inv_cov_vis = jnp.array(
+#     [
+#         jnp.pad(x, ((0, N_vis_time - x.shape[0]), (0, N_vis_time - x.shape[1])))
+#         for x in prior_params["inv_cov_vis"].values()
+#     ]
+# )
 
 
 # In[18]:
 
 
-sigma = flatten(
-    tree_map(lambda x: jnp.sqrt(jnp.diag(jnp.linalg.inv(x))), params["inv_cov_vis"])
-)[0]
+# sigma = flatten(
+#     tree_map(lambda x: jnp.sqrt(jnp.diag(jnp.linalg.inv(x))), params["inv_cov_vis"])
+# )[0]
 
 
 # In[19]:
 
 
-@jit
-def log_multinorm_sum_dict(x, mu, inv_cov):
-    return flatten(tree_map(log_multinorm, x, mu, inv_cov))[0].sum()
+# @jit
+# def log_multinorm_sum_dict(x, mu, inv_cov):
+#     return flatten(tree_map(log_multinorm, x, mu, inv_cov))[0].sum()
 
 
-@jit
-def log_multinorm_sum2(x, mu, inv_cov):
-    return vmap(log_multinorm, in_axes=(0, 0, None))(x, mu, inv_cov).sum()
+# @jit
+# def log_multinorm_sum2(x, mu, inv_cov):
+#     return vmap(log_multinorm, in_axes=(0, 0, None))(x, mu, inv_cov).sum()
 
 
-@jit
-def log_multinorm_sum3(x, mu, inv_cov):
-    return vmap(log_multinorm, in_axes=(0, None, 0))(x, mu, inv_cov).sum()
+# @jit
+# def log_multinorm_sum3(x, mu, inv_cov):
+#     return vmap(log_multinorm, in_axes=(0, None, 0))(x, mu, inv_cov).sum()
 
 
-# In[20]:
+# # In[20]:
+
+
+# @jit
+# def nlp(q, params):
+#     # rfi_amp = flatten(q['rfi_amp'])[0]
+#     rfi_real = flatten(q["rfi_real"])[0]
+#     rfi_imag = flatten(q["rfi_imag"])[0]
+
+#     G_amp = flatten(q["g_amp"])[0].reshape(N_ant, N_g_time)
+#     G_phase = flatten(q["g_phase"])[0].reshape(N_ant - 1, N_g_time)
+
+#     lp = (
+#         log_multinorm_sum2(G_amp, params["mu_G_amp"], params["inv_cov_G_amp"])
+#         + log_multinorm_sum2(G_phase, params["mu_G_phase"], params["inv_cov_G_phase"])
+#         + log_multinorm(
+#             q["rfi_orbit"], params["mu_RFI_orbit"], params["inv_cov_RFI_orbit"]
+#         )
+#         + jnp.sum(log_normal(rfi_real, 0.0, params["rfi_amp_std"]))
+#         + jnp.sum(log_normal(rfi_imag, 0.0, params["rfi_amp_std"]))
+#     )
+#     # jnp.sum(log_normal(rfi_amp, 0.0, params['rfi_amp_std']))
+
+#     #     V_real = flatten(tree_map(pad_vis, q['v_real']))[0].reshape(N_bl, N_vis_time)
+#     #     V_imag = flatten(tree_map(pad_vis, q['v_imag']))[0].reshape(N_bl, N_vis_time)
+#     #     lp += log_multinorm_sum3(V_real, 0.0, inv_cov_vis) + \
+#     #           log_multinorm_sum3(V_imag, 0.0, inv_cov_vis)
+
+#     lp += jnp.sum(log_normal(flatten(q["v_real"])[0], 0.0, sigma)) + jnp.sum(
+#         log_normal(flatten(q["v_imag"])[0], 0.0, sigma)
+#     )
+
+#     #     lp += log_multinorm_sum_dict(q['v_real'], params['mu_vis'], params['inv_cov_vis']) + \
+#     #           log_multinorm_sum_dict(q['v_imag'], params['mu_vis'], params['inv_cov_vis'])
+
+#     return -1.0 * lp
 
 
 @jit
 def nlp(q, params):
-    # rfi_amp = flatten(q['rfi_amp'])[0]
-    rfi_real = flatten(q["rfi_real"])[0]
-    rfi_imag = flatten(q["rfi_imag"])[0]
-
-    G_amp = flatten(q["g_amp"])[0].reshape(N_ant, N_g_time)
-    G_phase = flatten(q["g_phase"])[0].reshape(N_ant - 1, N_g_time)
-
-    lp = (
-        log_multinorm_sum2(G_amp, params["mu_G_amp"], params["inv_cov_G_amp"])
-        + log_multinorm_sum2(G_phase, params["mu_G_phase"], params["inv_cov_G_phase"])
-        + log_multinorm(
-            q["rfi_orbit"], params["mu_RFI_orbit"], params["inv_cov_RFI_orbit"]
-        )
-        + jnp.sum(log_normal(rfi_real, 0.0, params["rfi_amp_std"]))
-        + jnp.sum(log_normal(rfi_imag, 0.0, params["rfi_amp_std"]))
-    )
-    # jnp.sum(log_normal(rfi_amp, 0.0, params['rfi_amp_std']))
-
-    #     V_real = flatten(tree_map(pad_vis, q['v_real']))[0].reshape(N_bl, N_vis_time)
-    #     V_imag = flatten(tree_map(pad_vis, q['v_imag']))[0].reshape(N_bl, N_vis_time)
-    #     lp += log_multinorm_sum3(V_real, 0.0, inv_cov_vis) + \
-    #           log_multinorm_sum3(V_imag, 0.0, inv_cov_vis)
-
-    lp += jnp.sum(log_normal(flatten(q["v_real"])[0], 0.0, sigma)) + jnp.sum(
-        log_normal(flatten(q["v_imag"])[0], 0.0, sigma)
-    )
-
-    #     lp += log_multinorm_sum_dict(q['v_real'], params['mu_vis'], params['inv_cov_vis']) + \
-    #           log_multinorm_sum_dict(q['v_imag'], params['mu_vis'], params['inv_cov_vis'])
-
-    return -1.0 * lp
+    flat_q = flatten(q)[0]
+    return -1.0 * jnp.sum(log_normal(flat_q, 0.0, 1.0))
 
 
 @jit
@@ -700,22 +858,24 @@ print(f"U compiled {U._cache_size()} time(s).")
 
 ###############################################################
 
-F_prior = {
-    "g_amp": {i: params["inv_cov_G_amp"] for i in range(N_ant)},
-    "g_phase": {i: params["inv_cov_G_phase"] for i in range(N_ant - 1)},
-    "rfi_real": {
-        i: jnp.eye(N_rfi_time) / params["rfi_amp_std"] ** 2 for i in range(N_ant)
-    },
-    "rfi_imag": {
-        i: jnp.eye(N_rfi_time) / params["rfi_amp_std"] ** 2 for i in range(N_ant)
-    },
-    "rfi_orbit": params["inv_cov_RFI_orbit"],
-    "v_real": params["inv_cov_vis"],
-    "v_imag": params["inv_cov_vis"],
-}
+# F_prior = {
+#     "g_amp": {i: params["inv_cov_G_amp"] for i in range(N_ant)},
+#     "g_phase": {i: params["inv_cov_G_phase"] for i in range(N_ant - 1)},
+#     "rfi_real": {
+#         i: jnp.eye(N_rfi_time) / params["rfi_amp_std"] ** 2 for i in range(N_ant)
+#     },
+#     "rfi_imag": {
+#         i: jnp.eye(N_rfi_time) / params["rfi_amp_std"] ** 2 for i in range(N_ant)
+#     },
+#     "rfi_orbit": params["inv_cov_RFI_orbit"],
+#     "v_real": params["inv_cov_vis"],
+#     "v_imag": params["inv_cov_vis"],
+# }
 
 # zeros_like = lambda x: jnp.zeros((x.size,x.size))
 # F_prior = tree_map(zeros_like, true_values)
+eye_like = lambda x: jnp.eye(x.size)
+F_prior = tree_map(eye_like, true_values)
 
 ####################################
 
@@ -782,31 +942,55 @@ def block_std(F_block):
 
 
 #############################################################
-
 q_dev = {
     "v_real": {
-        i: x for i, x in enumerate(0.65 * random.normal(random.PRNGKey(10), (N_bl,)))
+        i: x for i, x in enumerate(0.1 * random.normal(random.PRNGKey(10), (N_bl,)))
     },
     "v_imag": {
-        i: x for i, x in enumerate(0.65 * random.normal(random.PRNGKey(11), (N_bl,)))
+        i: x for i, x in enumerate(0.1 * random.normal(random.PRNGKey(11), (N_bl,)))
     },
     "g_amp": {
-        i: x for i, x in enumerate(1.0 * random.normal(random.PRNGKey(12), (N_ant,)))
+        i: x for i, x in enumerate(1e-2 * random.normal(random.PRNGKey(12), (N_ant,)))
     },
     "g_phase": {
         i: x
-        for i, x in enumerate(1.0 * random.normal(random.PRNGKey(13), (N_ant - 1,)))
+        for i, x in enumerate(
+            jnp.deg2rad(1.0) * random.normal(random.PRNGKey(13), (N_ant - 1,))
+        )
     },
     "rfi_real": {
-        i: x for i, x in enumerate(0.1 * random.normal(random.PRNGKey(14), (N_ant,)))
+        i: x for i, x in enumerate(1e-3 * random.normal(random.PRNGKey(14), (N_ant,)))
     },
     "rfi_imag": {
-        i: x for i, x in enumerate(0.1 * random.normal(random.PRNGKey(14), (N_ant,)))
+        i: x for i, x in enumerate(1e-3 * random.normal(random.PRNGKey(14), (N_ant,)))
     },
-    "rfi_orbit": random.multivariate_normal(
-        random.PRNGKey(15), jnp.zeros(len(cov_RFI_orbit)), 1e0 * cov_RFI_orbit
-    ),
+    "rfi_orbit": 1.0 * random.normal(random.PRNGKey(15), (4,)),
 }
+
+# q_dev = {
+#     "v_real": {
+#         i: x for i, x in enumerate(0.65 * random.normal(random.PRNGKey(10), (N_bl,)))
+#     },
+#     "v_imag": {
+#         i: x for i, x in enumerate(0.65 * random.normal(random.PRNGKey(11), (N_bl,)))
+#     },
+#     "g_amp": {
+#         i: x for i, x in enumerate(1.0 * random.normal(random.PRNGKey(12), (N_ant,)))
+#     },
+#     "g_phase": {
+#         i: x
+#         for i, x in enumerate(1.0 * random.normal(random.PRNGKey(13), (N_ant - 1,)))
+#     },
+#     "rfi_real": {
+#         i: x for i, x in enumerate(0.1 * random.normal(random.PRNGKey(14), (N_ant,)))
+#     },
+#     "rfi_imag": {
+#         i: x for i, x in enumerate(0.1 * random.normal(random.PRNGKey(14), (N_ant,)))
+#     },
+#     "rfi_orbit": random.multivariate_normal(
+#         random.PRNGKey(15), jnp.zeros(len(cov_RFI_orbit)), 1e0 * cov_RFI_orbit
+#     ),
+# }
 
 # q_dev = {
 #     "v_real": {

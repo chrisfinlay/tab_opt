@@ -4,11 +4,10 @@ import numpyro
 
 
 def MVN(name, mu, L):
-    n = len(mu)
     rv = numpyro.sample(
         name,
         dist.TransformedDistribution(
-            dist.Normal(0, jnp.ones(n)),
+            dist.Normal(jnp.zeros(mu.shape), jnp.ones(mu.shape)),
             [
                 dist.transforms.LowerCholeskyAffine(mu, L),
             ],
@@ -18,11 +17,10 @@ def MVN(name, mu, L):
 
 
 def Normal(name, mu, sigma):
-    n = len(mu)
     rv = numpyro.sample(
         name,
         dist.TransformedDistribution(
-            dist.Normal(0, jnp.ones(n)),
+            dist.Normal(jnp.zeros(mu.shape), jnp.ones(mu.shape)),
             [
                 dist.transforms.AffineTransform(mu, sigma),
             ],

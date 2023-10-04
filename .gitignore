@@ -9,3 +9,4 @@ tab_opt.egg-info*
 *.pdf
 *.png
 *.DS_Store
+*.prof
