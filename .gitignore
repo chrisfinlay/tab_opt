@@ -10,3 +10,5 @@ tab_opt.egg-info*
 *.png
 *.DS_Store
 *.prof
+*.log
+*.f0_TSM0
