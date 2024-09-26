@@ -13,11 +13,6 @@ setup(
     author_email="christopher.finlay@unige.ch",
     license="MIT",
     packages=find_packages(),
-    # package_data={"tabascal": ["tabascal/data/*"]},
-    # entry_points="""
-    #     [console_scripts]
-    #     sim-vis=tabascal.examples.sim:cli
-    # """,
-    # install_requires=["jax", "jaxlib", "dask", "xarray", "dask-ms"],
+    install_requires=["numpyro", "optax"],
     zip_safe=False,
 )
