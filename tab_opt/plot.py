@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
+import os
 
 plt.rcParams["font.size"] = 16
 
@@ -69,6 +70,7 @@ def plot_complex_real_imag(
     save_name: str = None,
     diff: bool = False,
     max_plots: int = 10,
+    save_dir: str = "plots/",
 ):
     n_params = min(param.shape[1], max_plots)
     mean_r = param.real.mean(axis=0)
@@ -88,7 +90,7 @@ def plot_complex_real_imag(
 
     if save_name is not None:
         fig.savefig(
-            f"plots/{save_name}_real_imag.pdf", format="pdf", bbox_inches="tight"
+            os.path.join(save_dir, f"{save_name}_real_imag.pdf"), format="pdf", bbox_inches="tight"
         )
     plt.close(fig)
 
@@ -102,6 +104,7 @@ def plot_complex_amp_phase(
     save_name: str = None,
     diff: bool = False,
     max_plots: int = 10,
+    save_dir: str = "plots/",
 ):
     n_params = min(param.shape[1], max_plots)
     mean_amp = jnp.abs(param).mean(axis=0)
@@ -130,13 +133,13 @@ def plot_complex_amp_phase(
 
     if save_name is not None:
         fig.savefig(
-            f"plots/{save_name}_amp_phase.pdf", format="pdf", bbox_inches="tight"
+            os.path.join(save_dir, f"{save_name}_amp_phase.pdf"), format="pdf", bbox_inches="tight"
         )
     plt.close(fig)
 
 
 def plot_predictions(
-    times, pred, args, type: str = "", model_name: str = "", max_plots: int = 10
+    times, pred, args, type: str = "", model_name: str = "", max_plots: int = 10, save_dir: str = "plots/"
 ):
     plot_complex_real_imag(
         times=times,
@@ -146,6 +149,7 @@ def plot_predictions(
         name="Ast. Vis.",
         save_name=f"{model_name}_{type}_ast_vis",
         max_plots=max_plots,
+        save_dir=save_dir,
     )
 
     plot_complex_amp_phase(
@@ -157,6 +161,7 @@ def plot_predictions(
         save_name=f"{model_name}_{type}_rfi_vis",
         diff=False,  # True,
         max_plots=max_plots,
+        save_dir=save_dir,
     )
 
     plot_complex_amp_phase(
@@ -168,4 +173,5 @@ def plot_predictions(
         save_name=f"{model_name}_{type}_gains",
         diff=False,
         max_plots=max_plots,
+        save_dir=save_dir,
     )

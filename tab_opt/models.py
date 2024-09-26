@@ -12,12 +12,15 @@ from tab_opt.vis import (
     get_ast_vis11,
     get_ast_vis2,
     get_ast_vis3,
-    get_rfi_vis_compressed,
+    # get_rfi_vis_compressed,
+    get_rfi_vis_compressed_ri,
     get_rfi_vis_full,
     get_rfi_vis3,
     get_rfi_vis_fft2,
-    get_obs_vis,
-    get_obs_vis1,
+    # get_obs_vis,
+    # get_obs_vis1,
+    get_obs_vis_gains_all,
+    get_obs_vis_gains_ast,
     get_gains,
     get_gains_mean,
     get_gains_straight,
@@ -140,7 +143,7 @@ def fixed_orbit_real_rfi(args, v_obs=None):
     )
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -258,7 +261,7 @@ def fixed_orbit_real_rfi_compressed(args, v_obs=None):
     )
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -407,7 +410,7 @@ def fixed_orbit_real_rfi_compressed2(args, v_obs=None):
     # )
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -495,7 +498,7 @@ def fixed_orbit_real_rfi_compressed3(args, v_obs=None):
     )
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -600,7 +603,7 @@ def fixed_orbit_real_rfi_compressed4(args, v_obs=None):
     )
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -666,7 +669,7 @@ def fixed_orbit_real_rfi_compressed5(args, v_obs=None):
     )
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -728,7 +731,7 @@ def fixed_orbit_complex_rfi_compressed_fft(args, v_obs=None):
     ast_vis = numpyro.deterministic("ast_vis", get_ast_vis_fft(ast_k_r, ast_k_i))
 
     vis_obs = numpyro.deterministic(
-        "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+        "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
     )
 
     numpyro.deterministic(
@@ -777,11 +780,11 @@ def fixed_orbit_rfi_compressed_fft_standard_model(params, args):
     ast_k_i = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
         params["ast_k_i_base"], args["sigma_ast_k"], args["mu_ast_k_i"]
     )
-    vis_rfi = get_rfi_vis_compressed(rfi_r, rfi_i, args["rfi_kernel"], a1, a2)
+    vis_rfi = get_rfi_vis_compressed_ri(rfi_r, rfi_i, args["rfi_kernel"], a1, a2)
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
     gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
 
-    vis_obs = get_obs_vis1(vis_ast, vis_rfi, gains, a1, a2)
+    vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
 
     return vis_obs, (vis_rfi, vis_ast, gains)
 
@@ -821,7 +824,8 @@ def fixed_orbit_rfi_full_fft_standard_model(params, args):
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
     gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
 
-    vis_obs = get_obs_vis1(vis_ast, vis_rfi, gains, a1, a2)
+    vis_obs = get_obs_vis_gains_all(vis_ast, vis_rfi, gains, a1, a2)
+    # vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
 
     return vis_obs, (vis_rfi, vis_ast, gains)
 
@@ -861,7 +865,7 @@ def fixed_orbit_rfi_all_fft_standard_model(params, args):
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
     gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
 
-    vis_obs = get_obs_vis1(vis_ast, vis_rfi, gains, a1, a2)
+    vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
 
     return vis_obs, (vis_rfi, vis_ast, gains)
 
@@ -989,7 +993,7 @@ def fixed_orbit_rfi_fft_standard(args, model, v_obs=None):
 #     )
 
 #     vis_obs = numpyro.deterministic(
-#         "vis_obs", get_obs_vis(ast_vis, rfi_vis, gains, a1, a2)
+#         "vis_obs", get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2)
 #     )
 
 #     numpyro.deterministic(

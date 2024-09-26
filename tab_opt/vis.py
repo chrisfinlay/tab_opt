@@ -45,16 +45,16 @@ def averaging3(x, times):
 def pad_vis(vis, length):
     return jnp.pad(vis, (0, length - vis.shape[0]))
 
-
+# def get_rfi_vis_compressed(rfi_r, rfi_i, rfi_kernel, a1, a2):
 @jit
-def get_rfi_vis_compressed(rfi_r, rfi_i, rfi_kernel, a1, a2):
+def get_rfi_vis_compressed_ri(rfi_r, rfi_i, rfi_kernel, a1, a2):
     rfi_I = (rfi_r + 1.0j * rfi_i)[a1] * (rfi_r - 1.0j * rfi_i)[a2]
     vis_rfi = vmap(jnp.dot)(rfi_kernel, rfi_I)
     return vis_rfi
 
-
+# def get_rfi_vis_compressed1(rfi_amp, rfi_kernel, a1, a2):
 @jit
-def get_rfi_vis_compressed1(rfi_amp, rfi_kernel, a1, a2):
+def get_rfi_vis_compressed_comp(rfi_amp, rfi_kernel, a1, a2):
     rfi_I = rfi_amp[a1] * jnp.conjugate(rfi_amp[a2])
     vis_rfi = vmap(jnp.dot, in_axes=(2, 0))(rfi_kernel, rfi_I)
     return vis_rfi
@@ -78,7 +78,7 @@ def get_rfi_vis_full(rfi_amp, rfi_resample, rfi_phase, a1, a2, times, times_fine
     rfi_vis = jnp.sum(
         rfi_amp_fine[:, a1]
         * jnp.conjugate(rfi_amp_fine[:, a2])
-        * jnp.exp(1.0j * (rfi_phase[:, a1] - rfi_phase[:, a2])),
+        * jnp.exp(-1.0j * (rfi_phase[:, a1] - rfi_phase[:, a2])),
         axis=0,
     )
     rfi_vis = averaging2(rfi_vis.T, times, times_fine).T
@@ -225,15 +225,15 @@ def get_gains_mean(g_amp, g_phase, resample_g_amp, resample_g_phase):
     gains = g_amp * jnp.exp(1.0j * g_phase)
     return gains
 
-
+# def get_obs_vis(ast_vis, rfi_vis, gains, a1, a2):
 @jit
-def get_obs_vis(ast_vis, rfi_vis, gains, a1, a2):
+def get_obs_vis_gains_all(ast_vis, rfi_vis, gains, a1, a2):
     vis_obs = gains[a1] * jnp.conjugate(gains[a2]) * (ast_vis + rfi_vis)
     return vis_obs
 
-
+# def get_obs_vis1(ast_vis, rfi_vis, gains, a1, a2):
 @jit
-def get_obs_vis1(ast_vis, rfi_vis, gains, a1, a2):
+def get_obs_vis_gains_ast(ast_vis, rfi_vis, gains, a1, a2):
     vis_obs = gains[a1] * jnp.conjugate(gains[a2]) * ast_vis + rfi_vis
     return vis_obs
 

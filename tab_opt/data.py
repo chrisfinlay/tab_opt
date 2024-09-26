@@ -4,7 +4,7 @@ import dask.array as da
 import dask
 
 
-def extract_data(zarr_path: str, sampling: int = 1, N_time: int = -1):
+def extract_data(zarr_path: str, sampling: int = 1, N_time: int = -1, freq_idx: int = 0):
     """Extract
 
     Parameters:
@@ -38,15 +38,16 @@ def extract_data(zarr_path: str, sampling: int = 1, N_time: int = -1):
     bl_uvw = ds.bl_uvw.data[: N_time * N_int_samples : sampling]
     ants_uvw = ds.ants_uvw.data[: N_time * N_int_samples : sampling]
     ants_xyz = ds.ants_xyz.data[: N_time * N_int_samples : sampling]
-    vis_ast = ds.vis_ast.data[: N_time * N_int_samples : sampling]
-    vis_rfi = ds.vis_rfi.data[: N_time * N_int_samples : sampling]
-    vis_obs = ds.vis_obs.data[:N_time]
+    vis_ast = ds.vis_ast.data[: N_time * N_int_samples : sampling,:,freq_idx]
+    vis_rfi = ds.vis_rfi.data[: N_time * N_int_samples : sampling,:,freq_idx]
+    vis_obs = ds.vis_obs.data[:N_time,:,freq_idx]
+    vis_cal = ds.vis_calibrated.data[:N_time,:,freq_idx]
     noise = ds.noise_std.data[:N_time]
-    noise_data = ds.noise_data.data[:N_time]
+    noise_data = ds.noise_data.data[:N_time,:,freq_idx]
     int_time = ds.attrs["int_time"]
     freqs = ds.coords["freq"].data
-    gains_ants = ds.gains_ants.data[: N_time * N_int_samples : sampling]
-    rfi_A_app = ds.rfi_sat_A.data[:, : N_time * N_int_samples : sampling]
+    gains_ants = ds.gains_ants.data[: N_time * N_int_samples : sampling,:,freq_idx]
+    rfi_A_app = ds.rfi_sat_A.data[:, : N_time * N_int_samples : sampling,:,freq_idx]
     rfi_orbit = ds.rfi_sat_orbit.data
 
     data = [
@@ -63,6 +64,7 @@ def extract_data(zarr_path: str, sampling: int = 1, N_time: int = -1):
         vis_ast,
         vis_rfi,
         vis_obs,
+        vis_cal,
         noise,
         noise_data,
         int_time,

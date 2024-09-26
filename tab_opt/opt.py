@@ -10,6 +10,7 @@ from numpyro.infer.util import log_density
 from numpyro.optim import optax_to_numpyro
 
 import optax
+from optax.second_order import hessian_diag
 
 from jax import jvp, vjp, jit, vmap, random
 from jax.tree_util import tree_map
@@ -17,8 +18,8 @@ from jax.flatten_util import ravel_pytree as flatten
 from jax.scipy.sparse.linalg import cg
 from functools import partial
 
-H = jit(optax.hessian_diag, static_argnums=(0,))
-# H = optax.hessian_diag
+H = jit(hessian_diag, static_argnums=(0,))
+# H = hessian_diag
 
 
 @partial(jit, static_argnums=(0,))
