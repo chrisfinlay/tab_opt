@@ -13,6 +13,6 @@ setup(
     author_email="christopher.finlay@unige.ch",
     license="MIT",
     packages=find_packages(),
-    install_requires=["numpyro", "optax"],
+    install_requires=["numpyro", "optax", "chex"],
     zip_safe=False,
 )
