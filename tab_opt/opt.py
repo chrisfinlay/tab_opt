@@ -142,7 +142,8 @@ def run_svi(
     optimizer = optax_to_numpyro(optax.adabelief(epsilon))
     svi = SVI(model, guide, optimizer, Trace_ELBO())
     svi_results = svi.run(key, max_iter, args=args, v_obs=obs, init_params=init_params)
-    losses = svi_results.losses
+    losses = svi_results.losses / obs.size
+    svi_results = SVIRunResult(svi_results.params, svi_results.state, losses)
 
     # params = svi_results.params
     # losses = svi_results.losses
@@ -152,7 +153,8 @@ def run_svi(
         svi_results = svi.run(
             key, max_iter, args=args, v_obs=obs, init_params=svi_results.params
         )
-        svi_results = SVIRunResult(svi_results.params, svi_results.state, jnp.concatenate([losses, svi_results.losses]))
+        losses = jnp.concatenate([losses, svi_results.losses / obs.size]) 
+        svi_results = SVIRunResult(svi_results.params, svi_results.state, losses)
 
     return svi_results, guide
 
