@@ -18,6 +18,17 @@ from jax.flatten_util import ravel_pytree as flatten
 from jax.scipy.sparse.linalg import cg
 from functools import partial
 
+
+# Taken directly from numpyro
+from collections import namedtuple
+SVIRunResult = namedtuple("SVIRunResult", ["params", "state", "losses"])
+"""
+A :func:`~collections.namedtuple` consisting of the following fields:
+ - **params** - the optimized parameters.
+ - **state** - the last :data:`SVIState`
+ - **losses** - the losses collected at every step.
+"""
+
 H = jit(hessian_diag, static_argnums=(0,))
 # H = hessian_diag
 
@@ -131,6 +142,8 @@ def run_svi(
     optimizer = optax_to_numpyro(optax.adabelief(epsilon))
     svi = SVI(model, guide, optimizer, Trace_ELBO())
     svi_results = svi.run(key, max_iter, args=args, v_obs=obs, init_params=init_params)
+    losses = svi_results.losses
+
     # params = svi_results.params
     # losses = svi_results.losses
     if dual_run:
@@ -139,6 +152,7 @@ def run_svi(
         svi_results = svi.run(
             key, max_iter, args=args, v_obs=obs, init_params=svi_results.params
         )
+        svi_results = SVIRunResult(svi_results.params, svi_results.state, jnp.concatenate([losses, svi_results.losses]))
 
     return svi_results, guide
 
