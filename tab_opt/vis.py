@@ -78,7 +78,7 @@ def get_rfi_vis_full(rfi_amp, rfi_resample, rfi_phase, a1, a2, times, times_fine
     rfi_vis = jnp.sum(
         rfi_amp_fine[:, a1]
         * jnp.conjugate(rfi_amp_fine[:, a2])
-        * jnp.exp(-1.0j * (rfi_phase[:, a1] - rfi_phase[:, a2])),
+        * jnp.exp(1.0j * (rfi_phase[:, a1] - rfi_phase[:, a2])),
         axis=0,
     )
     rfi_vis = averaging2(rfi_vis.T, times, times_fine).T
