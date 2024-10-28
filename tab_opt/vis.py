@@ -320,7 +320,7 @@ def get_rfi_phase(times, rfi_orbit, ants_uvw, ants_xyz, freqs):
 
     rfi_xyz = orbit(times, *rfi_orbit)
     distances = jnp.linalg.norm(ants_xyz[:, :, :] - rfi_xyz[:, None, :], axis=-1)
-    c_distances = distances - ants_uvw[:, :, -1]
+    c_distances = distances + ants_uvw[:, :, -1]
 
     phases = -2.0 * jnp.pi * c_distances * freqs / c
 
