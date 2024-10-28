@@ -1,18 +1,3 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
-description = """Trajectory based Radio Frequency Interference (RFI) subtraction
-                 and calibration using Bayesian methods for radio
-                 interferometeric data."""
-
-setup(
-    name="tab_opt",
-    version="0.0.1",
-    description=description,
-    url="http://github.com/chrisfinlay/tab_opt",
-    author="Chris Finlay",
-    author_email="christopher.finlay@unige.ch",
-    license="MIT",
-    packages=find_packages(),
-    install_requires=["numpyro", "optax", "chex"],
-    zip_safe=False,
-)
+setup()
