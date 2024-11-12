@@ -2,12 +2,15 @@ import matplotlib.pyplot as plt
 import jax.numpy as jnp
 import os
 
+from tabascal.utils.plot import time_units
+
 plt.rcParams["font.size"] = 16
 
 
 def plot_comparison(
     ax, times, mean1, mean2, std1, std2, true1, true2, rmse, diff=False
 ):
+    times, units = time_units(times)
     for i, a in enumerate(ax):
         a[0].plot(rmse[..., i], "o")
         a[0].set_xlabel("Sample")
@@ -57,8 +60,8 @@ def plot_comparison(
                 alpha=0.3,
             )
 
-        a[1].set_xlabel("Time [s]")
-        a[2].set_xlabel("Time [s]")
+        a[1].set_xlabel(f"Time [{units}]")
+        a[2].set_xlabel(f"Time [{units}]")
 
 
 def plot_complex_real_imag(
