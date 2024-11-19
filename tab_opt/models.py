@@ -15,6 +15,8 @@ from tab_opt.vis import (
     # get_rfi_vis_compressed,
     get_rfi_vis_compressed_ri,
     get_rfi_vis_full,
+    get_rfi_vis_full_otf,
+    get_rfi_vis_full_otf_fft,
     get_rfi_vis3,
     get_rfi_vis_fft2,
     # get_obs_vis,
@@ -820,6 +822,78 @@ def fixed_orbit_rfi_full_fft_standard_model(params, args):
         a2,
         args["times"],
         args["times_fine"],
+    )
+    vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
+    gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
+
+    vis_obs = get_obs_vis_gains_all(vis_ast, vis_rfi, gains, a1, a2)
+    # vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
+
+    return vis_obs, (vis_rfi, vis_ast, gains)
+
+
+@jit
+def fixed_orbit_rfi_full_fft_standard_model_otf(params, args):
+    a1 = args["a1"]
+    a2 = args["a2"]
+
+    rfi_r = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
+        params["rfi_r_induce_base"], args["L_RFI"], args["mu_rfi_r"]
+    )
+    rfi_i = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
+        params["rfi_i_induce_base"], args["L_RFI"], args["mu_rfi_i"]
+    )
+    g_amp = vmap(affine_transform_full, in_axes=(0, None, 0))(
+        params["g_amp_induce_base"], args["L_G_amp"], args["mu_G_amp"]
+    )
+    g_phase = vmap(affine_transform_full, in_axes=(0, None, 0))(
+        params["g_phase_induce_base"], args["L_G_phase"], args["mu_G_phase"]
+    )
+    ast_k_r = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
+        params["ast_k_r_base"], args["sigma_ast_k"], args["mu_ast_k_r"]
+    )
+    ast_k_i = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
+        params["ast_k_i_base"], args["sigma_ast_k"], args["mu_ast_k_i"]
+    )
+    vis_rfi = get_rfi_vis_full_otf(
+        rfi_r + 1.0 * rfi_i,
+        args,
+    )
+    vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
+    gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
+
+    vis_obs = get_obs_vis_gains_all(vis_ast, vis_rfi, gains, a1, a2)
+    # vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
+
+    return vis_obs, (vis_rfi, vis_ast, gains)
+
+
+@partial(jit, static_argnums=(1,))
+def fixed_orbit_rfi_full_fft_standard_model_otf_fft(params, args):
+    a1 = args["a1"]
+    a2 = args["a2"]
+
+    rfi_r = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
+        params["rfi_r_induce_base"], args["L_RFI"], args["mu_rfi_r"]
+    )
+    rfi_i = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
+        params["rfi_i_induce_base"], args["L_RFI"], args["mu_rfi_i"]
+    )
+    g_amp = vmap(affine_transform_full, in_axes=(0, None, 0))(
+        params["g_amp_induce_base"], args["L_G_amp"], args["mu_G_amp"]
+    )
+    g_phase = vmap(affine_transform_full, in_axes=(0, None, 0))(
+        params["g_phase_induce_base"], args["L_G_phase"], args["mu_G_phase"]
+    )
+    ast_k_r = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
+        params["ast_k_r_base"], args["sigma_ast_k"], args["mu_ast_k_r"]
+    )
+    ast_k_i = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
+        params["ast_k_i_base"], args["sigma_ast_k"], args["mu_ast_k_i"]
+    )
+    vis_rfi = get_rfi_vis_full_otf_fft(
+        rfi_r + 1.0 * rfi_i,
+        args,
     )
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
     gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
