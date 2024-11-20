@@ -4,6 +4,8 @@ import jax.numpy as jnp
 from jax import jit, vmap
 from jax.flatten_util import ravel_pytree as flatten
 from jax.tree_util import tree_map
+from jax.lax import scan
+from jax import checkpoint
 
 from tabascal.jax.interferometry import rfi_vis
 from tabascal.jax.coordinates import orbit
@@ -12,19 +14,17 @@ from tab_opt.gp import gp_resample_otf, gp_resample_fft
 
 
 @partial(jit, static_argnums=(1,))
-def averaging(x, n_avg):
-    shape = x.shape
-    n = shape[0] // n_avg
-    x_avg = jnp.mean(jnp.reshape(x, newshape=(n, n_avg, -1)), axis=1)
+def averaging0(x, n_avg):
+    n = x.shape[0] // n_avg
+    x_avg = jnp.mean(jnp.reshape(x, newshape=(n, n_avg)), axis=1)
     return x_avg
 
 
-# @jit
-# def averaging(x, n_avg=128):
-#     shape = x.shape
-#     n = shape[0] // n_avg
-#     x_avg = jnp.mean(jnp.reshape(x, newshape=(n, n_avg, -1)), axis=1)
-#     return x_avg
+@partial(jit, static_argnums=(1,))
+def averaging1(x, n_avg):
+    n = x.shape[1] // n_avg
+    x_avg = jnp.mean(jnp.reshape(x, newshape=(-1, n, n_avg)), axis=2)
+    return x_avg
 
 
 @jit
@@ -125,33 +125,162 @@ def get_rfi_vis_full_otf(rfi_amp, args):
     return rfi_vis
 
 
-@partial(jit, static_argnums=(1,))
-def get_rfi_vis_full_otf_fft(rfi_amp, args):
-    # rfi_amp has shape (n_rfi, n_ant, n_time)
-    rfi_amp_fine = vmap(
-        vmap(
-            lambda y: gp_resample_fft(
-                y,
-                args["n_rfi_factor"],
-            ),
-            in_axes=(0),
-        ),
-        in_axes=(0),
-    )(rfi_amp)
-    # rfi_amp_fine has shape (n_rfi, n_ant, n_time_fine)
-    print(rfi_amp_fine.shape)
-    rfi_vis = jnp.sum(
-        rfi_amp_fine[:, args["a1"]]
-        * jnp.conjugate(rfi_amp_fine[:, args["a2"]])
-        * jnp.exp(
-            1.0j * (args["rfi_phase"][:, args["a1"]] - args["rfi_phase"][:, args["a2"]])
-        ),
-        axis=0,
+@jit
+def get_rfi_vis_fine(rfi_amp_fine, rfi_phase, a1, a2):
+
+    rfi_vis = (
+        rfi_amp_fine[a1]
+        * jnp.conjugate(rfi_amp_fine[a2])
+        * jnp.exp(1.0j * (rfi_phase[a1] - rfi_phase[a2]))
     )
-    # rfi_vis has shape (n_bl, n_time_fine)
-    rfi_vis = averaging2(rfi_vis.T, args["times"], args["times_fine"]).T
-    # rfi_vis has shape (n_bl, n_time)
+
     return rfi_vis
+
+
+@partial(jit, static_argnums=(4,))
+def get_rfi_vis_chunk(rfi_amp_fine, rfi_phase, a1, a2, args):
+
+    rfi_vis_fine = (
+        get_rfi_vis_fine if args["n_bl_chunk"] == 1 else checkpoint(get_rfi_vis_fine)
+    )
+    rfi_vis = rfi_vis_fine(rfi_amp_fine, rfi_phase, a1, a2)
+
+    # rfi_vis has shape (n_bl_chunk, n_time_fine)
+    rfi_vis = averaging1(rfi_vis, args["n_int_samples"])
+    # rfi_vis has shape (n_bl_chunk, n_time)
+    return rfi_vis
+
+
+@partial(jit, static_argnums=(4,))
+def get_rfi_vis_fft_src(rfi_amp, rfi_phase, a1, a2, args):
+    # rfi_amp has shape (n_ant, n_time)
+    rfi_amp_fine = vmap(gp_resample_fft, in_axes=(0, None))(
+        rfi_amp, args["n_rfi_factor"]
+    )
+    # rfi_amp_fine has shape (n_ant, n_time_fine)
+
+    n_chunks = args["n_bl_chunk"]
+    chunksize = args["n_bl"] // n_chunks
+
+    a1 = jnp.reshape(a1, (n_chunks, chunksize))
+    a2 = jnp.reshape(a2, (n_chunks, chunksize))
+
+    # Checkpoint rematerializes the intermediate results when they are smaller
+    # Needed for larger than memory computation
+    # Scan is an alternative to vmap here
+
+    # rfi_vis_chunk = (
+    #     get_rfi_vis_chunk
+    #     if n_chunks == 1
+    #     else checkpoint(get_rfi_vis_chunk, static_argnums=(4,))
+    # )
+    rfi_vis_chunk = get_rfi_vis_chunk
+
+    vis_rfi = vmap(rfi_vis_chunk, in_axes=(None, None, 0, 0, None))(
+        rfi_amp_fine,
+        rfi_phase,
+        a1,
+        a2,
+        args,
+    )
+
+    # @partial(checkpoint, prevent_cse=False)
+    # def eval_loop(carry, x):
+    #     i, a1_i, a2_i = x
+    #     carry = carry.at[i].set(
+    #         get_rfi_vis_chunk(
+    #             rfi_amp_fine,
+    #             rfi_phase,
+    #             a1_i,
+    #             a2_i,
+    #             args,
+    #         )
+    #     )
+    #     return carry, i
+
+    # vis_rfi, _ = scan(
+    #     eval_loop,
+    #     jnp.zeros((n_chunks, chunksize, args["n_time"]), dtype=jnp.complex128),
+    #     (jnp.arange(n_chunks), a1, a2),
+    # )
+
+    # @checkpoint
+    # def eval_loop(carry, x):
+    #     a1_i, a2_i = x
+    #     rfi_vis_chunk = get_rfi_vis_chunk(
+    #         rfi_amp_fine,
+    #         rfi_phase,
+    #         a1_i,
+    #         a2_i,
+    #         args,
+    #     )
+    #     return carry, rfi_vis_chunk
+
+    # _, vis_rfi = scan(
+    #     eval_loop,
+    #     None,
+    #     (a1, a2),
+    # )
+
+    return jnp.reshape(vis_rfi, (args["n_bl"], args["n_time"]))
+
+
+@partial(jit, static_argnums=(1,))
+def get_rfi_vis_full_otf_fft(rfi_amp, args, array_args):
+
+    # rfi_amp has shape (n_rfi, n_ant, n_time)
+    @checkpoint
+    def sum_loop(carry, x):
+        i, rfi_amp_i, rfi_phase_i = x
+        carry = carry + get_rfi_vis_fft_src(
+            rfi_amp_i,
+            rfi_phase_i,
+            array_args["a1"],
+            array_args["a2"],
+            args,
+        )
+        return carry, i
+
+    vis_rfi, _ = scan(
+        sum_loop,
+        jnp.zeros((args["n_bl"], args["n_time"]), dtype=jnp.complex128),
+        (jnp.arange(args["n_rfi"]), rfi_amp, array_args["rfi_phase"]),
+    )
+
+    return vis_rfi
+
+
+# @partial(jit, static_argnums=(1,))
+# def get_rfi_vis_full_otf_fft(rfi_amp, args, array_args):
+#     # rfi_amp has shape (n_rfi, n_ant, n_time)
+#     rfi_amp_fine = vmap(
+#         vmap(
+#             lambda y: gp_resample_fft(
+#                 y,
+#                 args["n_rfi_factor"],
+#             ),
+#             in_axes=(0),
+#         ),
+#         in_axes=(0),
+#     )(rfi_amp)
+#     # rfi_amp_fine has shape (n_rfi, n_ant, n_time_fine)
+#     # print(rfi_amp_fine.shape)
+#     rfi_vis = jnp.sum(
+#         rfi_amp_fine[:, array_args["a1"]]
+#         * jnp.conjugate(rfi_amp_fine[:, array_args["a2"]])
+#         * jnp.exp(
+#             1.0j
+#             * (
+#                 array_args["rfi_phase"][:, array_args["a1"]]
+#                 - array_args["rfi_phase"][:, array_args["a2"]]
+#             )
+#         ),
+#         axis=0,
+#     )
+#     # rfi_vis has shape (n_bl, n_time_fine)
+#     rfi_vis = averaging1(rfi_vis, args["n_int_samples"])
+#     # rfi_vis has shape (n_bl, n_time)
+#     return rfi_vis
 
 
 @partial(jit, static_argnums=(6,))

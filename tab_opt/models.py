@@ -31,6 +31,7 @@ from tab_opt.vis import (
 from tab_opt.transform import affine_transform_full, affine_transform_diag
 
 from functools import partial
+from frozendict import frozendict
 
 import numpy as np
 
@@ -868,40 +869,49 @@ def fixed_orbit_rfi_full_fft_standard_model_otf(params, args):
     return vis_obs, (vis_rfi, vis_ast, gains)
 
 
+##################################################################################################
+
+
 @partial(jit, static_argnums=(1,))
-def fixed_orbit_rfi_full_fft_standard_model_otf_fft(params, args):
-    a1 = args["a1"]
-    a2 = args["a2"]
+def fixed_orbit_rfi_full_fft_standard_model_otf_fft(params, args, array_args):
+    a1 = array_args["a1"]
+    a2 = array_args["a2"]
 
     rfi_r = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
-        params["rfi_r_induce_base"], args["L_RFI"], args["mu_rfi_r"]
+        params["rfi_r_induce_base"], array_args["L_RFI"], array_args["mu_rfi_r"]
     )
     rfi_i = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
-        params["rfi_i_induce_base"], args["L_RFI"], args["mu_rfi_i"]
+        params["rfi_i_induce_base"], array_args["L_RFI"], array_args["mu_rfi_i"]
     )
     g_amp = vmap(affine_transform_full, in_axes=(0, None, 0))(
-        params["g_amp_induce_base"], args["L_G_amp"], args["mu_G_amp"]
+        params["g_amp_induce_base"], array_args["L_G_amp"], array_args["mu_G_amp"]
     )
     g_phase = vmap(affine_transform_full, in_axes=(0, None, 0))(
-        params["g_phase_induce_base"], args["L_G_phase"], args["mu_G_phase"]
+        params["g_phase_induce_base"], array_args["L_G_phase"], array_args["mu_G_phase"]
     )
     ast_k_r = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
-        params["ast_k_r_base"], args["sigma_ast_k"], args["mu_ast_k_r"]
+        params["ast_k_r_base"], array_args["sigma_ast_k"], array_args["mu_ast_k_r"]
     )
     ast_k_i = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
-        params["ast_k_i_base"], args["sigma_ast_k"], args["mu_ast_k_i"]
+        params["ast_k_i_base"], array_args["sigma_ast_k"], array_args["mu_ast_k_i"]
     )
     vis_rfi = get_rfi_vis_full_otf_fft(
         rfi_r + 1.0 * rfi_i,
         args,
+        array_args,
     )
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
-    gains = get_gains_straight(g_amp, g_phase, args["g_times"], args["times"])
+    gains = get_gains_straight(
+        g_amp, g_phase, array_args["g_times"], array_args["times"]
+    )
 
     vis_obs = get_obs_vis_gains_all(vis_ast, vis_rfi, gains, a1, a2)
     # vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
 
     return vis_obs, (vis_rfi, vis_ast, gains)
+
+
+##################################################################################################
 
 
 @jit
@@ -981,7 +991,20 @@ def fixed_orbit_rfi_fft_standard(args, model, v_obs=None):
         "ast_k_i_base": ast_k_i_base,
     }
 
-    vis_obs, (vis_rfi, vis_ast, gains) = model(params, args)
+    if model.__name__ == "fixed_orbit_rfi_full_fft_standard_model_otf_fft":
+        static_args = {}
+        array_args = {}
+        for key, value in args.items():
+            if hasattr(value, "shape"):
+                array_args.update({key: value})
+            else:
+                static_args.update({key: value})
+
+        static_args = frozendict(static_args)
+
+        vis_obs, (vis_rfi, vis_ast, gains) = model(params, static_args, array_args)
+    else:
+        vis_obs, (vis_rfi, vis_ast, gains) = model(params, args)
 
     rfi_vis = numpyro.deterministic("rfi_vis", vis_rfi)
     ast_vis = numpyro.deterministic("ast_vis", vis_ast)
