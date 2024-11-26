@@ -4,13 +4,24 @@ import jax.numpy as jnp
 from jax import jit, vmap
 from jax.flatten_util import ravel_pytree as flatten
 from jax.tree_util import tree_map
-from jax.lax import scan
+from jax.lax import scan, dynamic_slice
 from jax import checkpoint
 
 from tabascal.jax.interferometry import rfi_vis
 from tabascal.jax.coordinates import orbit
 
 from tab_opt.gp import gp_resample_otf, gp_resample_fft
+
+
+@partial(jit, static_argnums=(1,))
+def averaging(x, n_avg):
+    n = x.shape[0] // n_avg
+
+    x_avg = jnp.reshape(x[:-1], newshape=(n, n_avg))
+    x_end = x[n_avg::n_avg][:, None]
+    x_avg = jnp.trapezoid(jnp.concatenate([x_avg, x_end], axis=1), dx=1 / n_avg, axis=1)
+
+    return x_avg
 
 
 @partial(jit, static_argnums=(1,))
@@ -76,11 +87,15 @@ def get_rfi_vis_compressed_comp(rfi_amp, rfi_kernel, a1, a2):
 #     return rfi_vis
 
 
-# Should replace rfi_vis calculation below with a scan and averaging per source to reduce memory usage
-@jit
-def get_rfi_vis_full(rfi_amp, rfi_resample, rfi_phase, a1, a2, times, times_fine):
+# def get_rfi_vis_full(rfi_amp, rfi_resample, rfi_phase, a1, a2, times, times_fine):
+@partial(jit, static_argnums=(1,))
+def get_rfi_vis_full(rfi_amp, args, array_args):
+    a1, a2 = array_args["a1"], array_args["a2"]
+    rfi_phase = array_args["rfi_phase"]
     # rfi_amp has shape (n_rfi, n_ant, n_time)
-    rfi_amp_fine = vmap(lambda x, y: x @ y.T, in_axes=(0, None))(rfi_amp, rfi_resample)
+    rfi_amp_fine = vmap(lambda x, y: x @ y.T, in_axes=(0, None))(
+        rfi_amp, array_args["resample_rfi"]
+    )
     # rfi_amp_fine has shape (n_rfi, n_ant, n_time_fine)
     rfi_vis = jnp.sum(
         rfi_amp_fine[:, a1]
@@ -89,7 +104,8 @@ def get_rfi_vis_full(rfi_amp, rfi_resample, rfi_phase, a1, a2, times, times_fine
         axis=0,
     )
     # rfi_vis has shape (n_bl, n_time_fine)
-    rfi_vis = averaging2(rfi_vis.T, times, times_fine).T
+    rfi_vis = averaging1(rfi_vis[:, :-1], args["n_int_samples"])
+    # rfi_vis = vmap(averaging, in_axes=(0, None))(rfi_vis, args["n_int_samples"])
     # rfi_vis has shape (n_bl, n_time)
     return rfi_vis
 
@@ -146,7 +162,8 @@ def get_rfi_vis_chunk(rfi_amp_fine, rfi_phase, a1, a2, args):
     rfi_vis = rfi_vis_fine(rfi_amp_fine, rfi_phase, a1, a2)
 
     # rfi_vis has shape (n_bl_chunk, n_time_fine)
-    rfi_vis = averaging1(rfi_vis, args["n_int_samples"])
+    # rfi_vis = averaging1(rfi_vis, args["n_int_samples"])
+    rfi_vis = vmap(averaging, in_axes=(0, None))(rfi_vis, args["n_int_samples"])
     # rfi_vis has shape (n_bl_chunk, n_time)
     return rfi_vis
 

@@ -94,7 +94,7 @@ def gp_resample_fft(signal, factor):
 
     # Remove padding
     pad_new = pad_length * factor
-    signal_supersampled = supersampled[pad_new:-pad_new].real
+    signal_supersampled = supersampled[pad_new : -pad_new + 1].real
 
     # print(signal_supersampled.shape)
 
