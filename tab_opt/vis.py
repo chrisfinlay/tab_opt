@@ -369,6 +369,12 @@ def get_ast_vis_fft(ast_k_r, ast_k_i):
     return jnp.fft.ifft(ast_k_r + 1.0j * ast_k_i, axis=1)
 
 
+@partial(jit, static_argnums=(2,))
+def get_ast_vis_fft_padded(ast_k_r, ast_k_i, ast_pad):
+    ast_k_padded = jnp.fft.ifft(ast_k_r + 1.0j * ast_k_i, axis=1)
+    return ast_k_padded[:,ast_pad:-ast_pad]
+
+
 @jit
 def get_ast_vis(vis_r, vis_i, resample_vis):
     n_bl = len(vis_r)

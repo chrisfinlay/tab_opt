@@ -7,6 +7,7 @@ import numpyro.distributions as dist
 from tab_opt.dist import MVN, Normal
 from tab_opt.vis import (
     get_ast_vis_fft,
+    get_ast_vis_fft_padded,
     get_ast_vis,
     get_ast_vis1,
     get_ast_vis11,
@@ -822,6 +823,45 @@ def fixed_orbit_rfi_full_fft_standard_model(params, args, array_args):
         array_args,
     )
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
+    gains = get_gains_straight(
+        g_amp, g_phase, array_args["g_times"], array_args["times"]
+    )
+
+    vis_obs = get_obs_vis_gains_all(vis_ast, vis_rfi, gains, a1, a2)
+    # vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
+
+    return vis_obs, (vis_rfi, vis_ast, gains, rfi_A)
+
+@partial(jit, static_argnums=(1,))
+def fixed_orbit_rfi_full_fft_standard_padded_model(params, args, array_args):
+    a1 = array_args["a1"]
+    a2 = array_args["a2"]
+
+    rfi_r = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
+        params["rfi_r_induce_base"], array_args["L_RFI"], array_args["mu_rfi_r"]
+    )
+    rfi_i = vmap(vmap(affine_transform_full, (0, None, 0), 0), (1, None, 1), 1)(
+        params["rfi_i_induce_base"], array_args["L_RFI"], array_args["mu_rfi_i"]
+    )
+    g_amp = vmap(affine_transform_full, in_axes=(0, None, 0))(
+        params["g_amp_induce_base"], array_args["L_G_amp"], array_args["mu_G_amp"]
+    )
+    g_phase = vmap(affine_transform_full, in_axes=(0, None, 0))(
+        params["g_phase_induce_base"], array_args["L_G_phase"], array_args["mu_G_phase"]
+    )
+    ast_k_r = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
+        params["ast_k_r_base"], array_args["sigma_ast_k"], array_args["mu_ast_k_r"]
+    )
+    ast_k_i = vmap(affine_transform_diag, in_axes=(0, 0, 0))(
+        params["ast_k_i_base"], array_args["sigma_ast_k"], array_args["mu_ast_k_i"]
+    )
+    rfi_A = rfi_r + 1.0 * rfi_i
+    vis_rfi = get_rfi_vis_full(
+        rfi_A,
+        args,
+        array_args,
+    )
+    vis_ast = get_ast_vis_fft_padded(ast_k_r, ast_k_i, args["ast_pad"])
     gains = get_gains_straight(
         g_amp, g_phase, array_args["g_times"], array_args["times"]
     )
