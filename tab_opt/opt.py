@@ -21,6 +21,7 @@ from functools import partial
 
 # Taken directly from numpyro
 from collections import namedtuple
+
 SVIRunResult = namedtuple("SVIRunResult", ["params", "state", "losses"])
 """
 A :func:`~collections.namedtuple` consisting of the following fields:
@@ -118,7 +119,9 @@ def fisher_diag_inv2(
 
 def run_svi(
     model,
-    args,
+    # args,
+    static_args,
+    array_args,
     obs,
     max_iter=1_000,
     guide_family="AutoDelta",
@@ -141,7 +144,15 @@ def run_svi(
     # optimizer = numpyro.optim.Adam(epsilon)
     optimizer = optax_to_numpyro(optax.adabelief(epsilon))
     svi = SVI(model, guide, optimizer, Trace_ELBO())
-    svi_results = svi.run(key, max_iter, args=args, v_obs=obs, init_params=init_params)
+    # svi_results = svi.run(key, max_iter, args=args, v_obs=obs, init_params=init_params)
+    svi_results = svi.run(
+        key,
+        max_iter,
+        static_args=static_args,
+        array_args=array_args,
+        v_obs=obs,
+        init_params=init_params,
+    )
     losses = svi_results.losses / obs.size
     svi_results = SVIRunResult(svi_results.params, svi_results.state, losses)
 
@@ -150,20 +161,45 @@ def run_svi(
     if dual_run:
         optimizer = optax_to_numpyro(optax.adabelief(epsilon / 10))
         svi = SVI(model, guide, optimizer, Trace_ELBO())
+        # svi_results = svi.run(
+        #     key, max_iter, args=args, v_obs=obs, init_params=svi_results.params
+        # )
         svi_results = svi.run(
-            key, max_iter, args=args, v_obs=obs, init_params=svi_results.params
+            key,
+            max_iter,
+            static_args=static_args,
+            array_args=array_args,
+            v_obs=obs,
+            init_params=svi_results.params,
         )
-        losses = jnp.concatenate([losses, svi_results.losses / obs.size]) 
+        losses = jnp.concatenate([losses, svi_results.losses / obs.size])
         svi_results = SVIRunResult(svi_results.params, svi_results.state, losses)
 
     return svi_results, guide
 
 
-def svi_predict(model, guide, vi_params, args, num_samples=100, key=random.PRNGKey(2)):
+# def svi_predict(model, guide, vi_params, args, num_samples=100, key=random.PRNGKey(2)):
+#     predictive = Predictive(
+#         model=model, guide=guide, params=vi_params, num_samples=num_samples
+#     )
+#     predictions = predictive(key, args=args)
+
+#     return predictions
+
+
+def svi_predict(
+    model,
+    guide,
+    vi_params,
+    static_args,
+    array_args,
+    num_samples=100,
+    key=random.PRNGKey(2),
+):
     predictive = Predictive(
         model=model, guide=guide, params=vi_params, num_samples=num_samples
     )
-    predictions = predictive(key, args=args)
+    predictions = predictive(key, static_args=static_args, array_args=array_args)
 
     return predictions
 

@@ -794,7 +794,7 @@ def fixed_orbit_rfi_compressed_fft_standard_model(params, args):
 
 
 @partial(jit, static_argnums=(1,))
-def fixed_orbit_rfi_full_fft_standard_model(params, args, array_args):
+def fixed_orbit_rfi_full_fft_standard_model(params, static_args, array_args):
     a1 = array_args["a1"]
     a2 = array_args["a2"]
 
@@ -819,7 +819,7 @@ def fixed_orbit_rfi_full_fft_standard_model(params, args, array_args):
     rfi_A = rfi_r + 1.0 * rfi_i
     vis_rfi = get_rfi_vis_full(
         rfi_A,
-        args,
+        static_args,
         array_args,
     )
     vis_ast = get_ast_vis_fft(ast_k_r, ast_k_i)
@@ -831,6 +831,7 @@ def fixed_orbit_rfi_full_fft_standard_model(params, args, array_args):
     # vis_obs = get_obs_vis_gains_ast(vis_ast, vis_rfi, gains, a1, a2)
 
     return vis_obs, (vis_rfi, vis_ast, gains, rfi_A)
+
 
 @partial(jit, static_argnums=(1,))
 def fixed_orbit_rfi_full_fft_standard_padded_model(params, args, array_args):
@@ -995,11 +996,11 @@ def fixed_orbit_rfi_all_fft_standard_model(params, args):
     return vis_obs, (vis_rfi, vis_ast, gains)
 
 
-def fixed_orbit_rfi_fft_standard(args, model, v_obs=None):
-    rfi_shape = args["mu_rfi_r"].shape
-    g_amp_shape = args["mu_G_amp"].shape
-    g_phase_shape = args["mu_G_phase"].shape
-    ast_k_shape = args["mu_ast_k_r"].shape
+def fixed_orbit_rfi_fft_standard(static_args, array_args, model, v_obs=None):
+    rfi_shape = array_args["mu_rfi_r"].shape
+    g_amp_shape = array_args["mu_G_amp"].shape
+    g_phase_shape = array_args["mu_G_phase"].shape
+    ast_k_shape = array_args["mu_ast_k_r"].shape
 
     rfi_r_base = numpyro.sample(
         "rfi_r_induce_base", dist.Normal(jnp.zeros(rfi_shape), jnp.ones(rfi_shape))
@@ -1032,15 +1033,15 @@ def fixed_orbit_rfi_fft_standard(args, model, v_obs=None):
         "ast_k_i_base": ast_k_i_base,
     }
 
-    static_args = {}
-    array_args = {}
-    for key, value in args.items():
-        if hasattr(value, "shape"):
-            array_args.update({key: value})
-        else:
-            static_args.update({key: value})
+    # static_args = {}
+    # array_args = {}
+    # for key, value in args.items():
+    #     if hasattr(value, "shape"):
+    #         array_args.update({key: value})
+    #     else:
+    #         static_args.update({key: value})
 
-    static_args = frozendict(static_args)
+    # static_args = frozendict(static_args)
 
     vis_obs, (vis_rfi, vis_ast, gains, rfi_A) = model(params, static_args, array_args)
 
@@ -1054,22 +1055,23 @@ def fixed_orbit_rfi_fft_standard(args, model, v_obs=None):
 
     numpyro.deterministic(
         "rmse_ast",
-        rmse(ast_vis, args["vis_ast_true"]) / jnp.sqrt(2),
+        rmse(ast_vis, array_args["vis_ast_true"]) / jnp.sqrt(2),
     )
     numpyro.deterministic(
         "rmse_rfi",
-        rmse(rfi_vis, args["vis_rfi_true"]) / jnp.sqrt(2),
+        rmse(rfi_vis, array_args["vis_rfi_true"]) / jnp.sqrt(2),
     )
     numpyro.deterministic(
         "rmse_gains",
-        rmse(gains, args["gains_true"]) / jnp.sqrt(2),
+        rmse(gains, array_args["gains_true"]) / jnp.sqrt(2),
     )
 
     if v_obs is not None:
         return numpyro.sample(
             "obs",
             dist.Normal(
-                jnp.concatenate([vis_obs.real, vis_obs.imag], axis=1), args["noise"]
+                jnp.concatenate([vis_obs.real, vis_obs.imag], axis=1),
+                array_args["noise"],
             ),
             obs=v_obs,
         )
