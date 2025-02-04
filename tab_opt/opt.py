@@ -243,21 +243,51 @@ def inv_post_fvp(f, x, v, max_iter):
 def post_samples(
     f, x, y_obs, noise_sigma, num_samples=10, key=random.PRNGKey(1), max_iter=1_000
 ):
+    """Sample from a Gaussian approximation of the posterior distribution about the MAP point.
+
+    Parameters
+    ----------
+    f : Callable
+        JAX differentiable model forward mapping i.e. f(x) = y.
+    x : JAX tree
+        JAX tree of parameters.
+    y_obs : Array
+        JAX array of observed y values.
+    noise_sigma : float
+        Standard deviation of the noise for the Gaussian likelihood.
+    num_samples : int, optional
+        Number of posterior samples to draw, by default 10.
+    key : PRNGKey, optional
+        Pseudo-random number generator key, by default random.PRNGKey(1).
+    max_iter : int, optional
+        Maximum number of conjugate gradient iterations used in Fisher inversion, by default 1_000.
+
+    Returns
+    -------
+    JAX tree
+        JAX tree of parameter samples.
+    """
+    # Normalize function output such that Likelihood is N(0,1)
+    f_norm = lambda x: f(x) / noise_sigma
     key, *subkeys = random.split(key, num=3)
     flat_x, unflatten = flatten(x)
+    # Get Prior Samples where the prior is assumed to be dphi ~ N(0,1)
     p_samples = vmap(lambda x: unflatten(x))(
         random.normal(subkeys[0], (num_samples, flat_x.size))
     )
 
-    l_samples = noise_sigma * random.normal(subkeys[1], (num_samples, y_obs.size))
-    l_samples_trans = vmap(lambda y: vjp_(f, x, y), in_axes=(0,))(
-        l_samples / noise_sigma**2
-    )
+    # Get Likelihood noise samples where the likelihood is assumed to be deta ~ N(0,sigma_n^2)
+    l_samples = random.normal(subkeys[1], (num_samples, y_obs.size))
+    # Transform Likelihood samples as dtheta' = J^T Sigma^-1_n deta
+    l_samples_trans = vmap(lambda y: vjp_(f_norm, x, y), in_axes=(0,))(l_samples)
+    # Add transformed likelihood and prior samples
     samples = tree_map(jnp.add, l_samples_trans, p_samples)
     in_axes = (tree_map(lambda _: 0, x),)
+    # Apply inverse Posterior Fisher to transformed samples
     param_deltas = vmap(
-        lambda v: inv_post_fvp(f, x, v, max_iter=max_iter), in_axes=in_axes
+        lambda v: inv_post_fvp(f_norm, x, v, max_iter=max_iter), in_axes=in_axes
     )(samples)
+    # Join samples with anti-correlated versions to increase sample size and leave mean @ MAP
     param_deltas_ = tree_map(lambda x: jnp.concatenate([x, -x], axis=0), param_deltas)
 
     return param_deltas_
