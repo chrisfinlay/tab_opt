@@ -17,7 +17,7 @@ from tab_opt.gp import gp_resample_otf, gp_resample_fft
 def averaging(x, n_avg):
     n = x.shape[0] // n_avg
 
-    x_avg = jnp.reshape(x[:-1], newshape=(n, n_avg))
+    x_avg = jnp.reshape(x[:-1], (n, n_avg))
     x_end = x[n_avg::n_avg][:, None]
     x_avg = jnp.trapezoid(jnp.concatenate([x_avg, x_end], axis=1), dx=1 / n_avg, axis=1)
 
@@ -27,14 +27,14 @@ def averaging(x, n_avg):
 @partial(jit, static_argnums=(1,))
 def averaging0(x, n_avg):
     n = x.shape[0] // n_avg
-    x_avg = jnp.mean(jnp.reshape(x, newshape=(n, n_avg)), axis=1)
+    x_avg = jnp.mean(jnp.reshape(x, (n, n_avg)), axis=1)
     return x_avg
 
 
 @partial(jit, static_argnums=(1,))
 def averaging1(x, n_avg):
     n = x.shape[1] // n_avg
-    x_avg = jnp.mean(jnp.reshape(x, newshape=(-1, n, n_avg)), axis=2)
+    x_avg = jnp.mean(jnp.reshape(x, (-1, n, n_avg)), axis=2)
     return x_avg
 
 
@@ -42,7 +42,7 @@ def averaging1(x, n_avg):
 def averaging2(x, times, times_fine):
     n = len(times)
     n_avg = int(len(times_fine) / n)
-    x_avg = jnp.mean(jnp.reshape(x, newshape=(n, n_avg, -1)), axis=1)
+    x_avg = jnp.mean(jnp.reshape(x, (n, n_avg, -1)), axis=1)
     return x_avg
 
 
@@ -50,7 +50,7 @@ def averaging2(x, times, times_fine):
 def averaging3(x, times):
     n = len(times)
     n_avg = int(x.shape[0] / n)
-    x_avg = jnp.mean(jnp.reshape(x, newshape=(n, n_avg, -1)), axis=1)
+    x_avg = jnp.mean(jnp.reshape(x, (n, n_avg, -1)), axis=1)
     return x_avg
 
 
